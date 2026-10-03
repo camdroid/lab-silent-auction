@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#0b6a6a">
+<title>LAB Lot Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Public+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a working board. Overview = stage counts (which double as filters) above a dense lot list;
+   lot page = phone-first column with the camera at the top, then stages, flags, description. */
+:root {
+  --paper: #f4f5f8;
+  --sheet: #ffffff;
+  --ink: #1a2030;
+  --ink-2: #586176;
+  --rule: #dde1ea;
+  --teal: #0b6a6a;  --teal-soft: #dff0ef;   /* done / primary action */
+  --brass: #a26c17; --brass-soft: #f5e8d2;  /* next step */
+  --flag: #b2412f;  --flag-soft: #f9e2dd;   /* open flags */
+  --digital: #4f5aa6; --digital-soft: #e6e8f6;
+  --f-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Public Sans", "Helvetica Neue", Arial, system-ui, sans-serif;
+  --f-mono: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --r: 10px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #11151d; --sheet: #191e29; --ink: #e7e9ef; --ink-2: #9ba3b6; --rule: #2a3141;
+  --teal: #5ac0ba; --teal-soft: #15332f; --brass: #e1a94b; --brass-soft: #382b15;
+  --flag: #f08b7a; --flag-soft: #3c1f1a; --digital: #9aa3ec; --digital-soft: #23264a; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --paper: #11151d; --sheet: #191e29; --ink: #e7e9ef; --ink-2: #9ba3b6; --rule: #2a3141;
+  --teal: #5ac0ba; --teal-soft: #15332f; --brass: #e1a94b; --brass-soft: #382b15;
+  --flag: #f08b7a; --flag-soft: #3c1f1a; --digital: #9aa3ec; --digital-soft: #23264a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+img { max-width: 100%; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 var(--f-body);
+       padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 16px; padding-block: 16px 64px; }
+h1, h2, h3 { font-family: var(--f-display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+p { margin: 0; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--ink-2); }
+button, input, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+a { color: var(--teal); }
+
+/* top bar */
+.bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.brand { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.brand h1 { font-size: 24px; font-weight: 800; }
+.brand span { font-size: 13px; color: var(--ink-2); }
+.nav { display: flex; gap: 4px; }
+.nav a { text-decoration: none; color: var(--ink-2); font-weight: 600; font-size: 14px; padding: 6px 10px; border-radius: 8px; }
+.nav a[aria-current="page"] { background: var(--ink); color: var(--sheet); }
+.banner { margin-top: 12px; font-size: 14px; border-radius: 8px; padding: 9px 12px; }
+.banner.info { background: var(--digital-soft); color: var(--ink); }
+.banner.warn { background: var(--flag-soft); color: var(--flag); font-weight: 600; }
+.retry { background: #fff; color: #000; border: 0; border-radius: 4px; padding: 1px 6px; font-size: 11px; font-weight: 700; cursor: pointer; }
+
+.btn { border: 1px solid var(--rule); background: var(--sheet); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; color: var(--ink); }
+.btn:hover { border-color: var(--teal); }
+.btn.primary { background: var(--teal); border-color: var(--teal); color: var(--sheet); }
+.btn.danger { color: var(--flag); }
+.btn.small { padding: 4px 10px; font-size: 13px; }
+.btn:disabled { opacity: .5; cursor: default; }
+
+/* stage summary */
+.stages { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin-top: 18px; }
+@media (max-width: 860px) { .stages { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .stages { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.stage { text-align: left; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--r); padding: 10px 12px; cursor: pointer; display: grid; gap: 4px; min-width: 0; }
+.stage:hover { border-color: var(--ink-2); }
+.stage[aria-pressed="true"] { border-color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass); }
+.stage .n { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); font-weight: 700; }
+.stage .lab { font-weight: 600; font-size: 14px; line-height: 1.25; }
+.stage .big { font-family: var(--f-display); font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stage .big small { font-size: 14px; color: var(--ink-2); font-weight: 600; }
+.stage .meter { height: 5px; background: var(--paper); border-radius: 3px; overflow: hidden; }
+.stage .meter i { display: block; height: 100%; background: var(--teal); }
+.stage .wait { font-size: 12px; color: var(--brass); font-weight: 600; }
+.stage.flagtile .big { color: var(--flag); }
+.stage.flagtile .wait { color: var(--ink-2); }
+
+/* toolbar */
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 18px; }
+.toolbar input[type=search] { flex: 1 1 200px; min-width: 0; padding: 8px 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; background: var(--sheet); }
+.seg button { border: 0; background: none; padding: 7px 11px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--sheet); }
+.active-filter { display: inline-flex; gap: 6px; align-items: center; background: var(--brass-soft); color: var(--ink); font-size: 13px; font-weight: 600; padding: 5px 6px 5px 10px; border-radius: 999px; }
+.active-filter button { border: 0; background: none; cursor: pointer; font-size: 15px; line-height: 1; padding: 0 4px; color: var(--ink-2); }
+.count { margin-left: auto; font-size: 13px; color: var(--ink-2); }
+
+/* lot list */
+.list { margin-top: 12px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--r); }
+.row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto auto; gap: 6px 14px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--rule); text-decoration: none; color: inherit; }
+.row:last-child { border-bottom: 0; }
+.row:hover { background: var(--paper); }
+.row .id { font-family: var(--f-mono); font-size: 15px; color: var(--ink-2); }
+.row .t { min-width: 0; }
+.row .t b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .t span { display: block; font-size: 13px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .flagcell { min-width: 64px; text-align: right; }
+@media (max-width: 640px) {
+  .row { grid-template-columns: 36px minmax(0, 1fr) auto; }
+  .row .pips { grid-column: 2 / 3; }
+  .row .flagcell { grid-column: 3; grid-row: 2; }
+  .row .typecell { grid-column: 3; grid-row: 1; }
+}
+.empty { padding: 32px; text-align: center; color: var(--ink-2); }
+
+.pips { display: flex; gap: 4px; }
+.pip { width: 22px; height: 22px; border-radius: 6px; border: 1.5px solid var(--rule); display: grid; place-items: center; font-size: 12px; color: transparent; }
+.pip.done { background: var(--teal); border-color: var(--teal); color: var(--sheet); }
+.pip.next { border-color: var(--brass); background: var(--brass-soft); }
+.pip svg { width: 13px; height: 13px; }
+
+.badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.badge.phys { background: var(--paper); color: var(--ink-2); border: 1px solid var(--rule); }
+.badge.dig { background: var(--digital-soft); color: var(--digital); }
+.badge.unset { background: var(--paper); color: var(--ink-2); border: 1px dashed var(--ink-2); }
+.badge.flag { background: var(--flag-soft); color: var(--flag); }
+.badge.retake { background: var(--flag); color: var(--sheet); }
+.badge.done { background: var(--teal-soft); color: var(--teal); }
+
+/* lot page */
+.back { display: inline-flex; gap: 6px; align-items: center; text-decoration: none; font-weight: 600; font-size: 14px; margin-top: 14px; }
+.lothead { margin-top: 10px; display: grid; gap: 6px; }
+.lothead .eyebrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.lothead .lotno { font-family: var(--f-mono); font-size: 14px; color: var(--brass); font-weight: 500; }
+.lothead h2 { font-size: clamp(24px, 4.5vw, 34px); font-weight: 800; line-height: 1.1; }
+.lothead .sub { color: var(--ink-2); }
+.lotgrid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 20px; margin-top: 18px; align-items: start; }
+@media (max-width: 820px) { .lotgrid { grid-template-columns: minmax(0, 1fr); } }
+.col { display: grid; gap: 16px; min-width: 0; }
+.card { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--r); padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.card h3 { font-size: 17px; font-weight: 600; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.card h3 small { font-family: var(--f-body); font-size: 13px; color: var(--ink-2); font-weight: 500; }
+
+.camera { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 8px; }
+.camera label { display: flex; align-items: center; justify-content: center; gap: 10px; border-radius: var(--r); padding: 18px 12px; font-weight: 700; font-size: 17px; cursor: pointer; text-align: center; }
+.camera .shoot { background: var(--teal); color: var(--sheet); }
+.camera .lib { background: var(--teal-soft); color: var(--teal); font-size: 14px; font-weight: 600; }
+.camera svg { width: 24px; height: 24px; flex: none; }
+.camera label:focus-within { outline: 2px solid var(--brass); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+
+.photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.ph { position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: var(--paper); border: 1px solid var(--rule); max-width: 100%; }
+.ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ph .ph-fake { width: 100%; height: 100%; display: grid; place-items: center; font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); background: repeating-linear-gradient(135deg, var(--paper) 0 8px, var(--sheet) 8px 16px); }
+.ph .up { position: absolute; inset: auto 0 0 0; padding: 6px; background: linear-gradient(transparent, rgba(0,0,0,.65)); color: #fff; font-size: 11px; font-weight: 600; }
+.ph .up .m { height: 4px; background: rgba(255,255,255,.3); border-radius: 2px; margin-top: 3px; overflow: hidden; }
+.ph .up .m i { display: block; height: 100%; background: #fff; }
+.ph.replaced { opacity: .45; }
+.ph .tag { position: absolute; top: 4px; left: 4px; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: var(--flag); color: #fff; }
+.photo-empty { border: 1.5px dashed var(--rule); border-radius: 8px; padding: 18px; text-align: center; color: var(--ink-2); font-size: 14px; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--teal); font-weight: 600; font-size: 13px; cursor: pointer; }
+
+.checks { display: grid; gap: 2px; }
+.check { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 6px; border-radius: 8px; cursor: pointer; }
+.check:hover { background: var(--paper); }
+.check input { width: 22px; height: 22px; accent-color: var(--teal); margin: 0; cursor: pointer; }
+.check .l { font-weight: 600; }
+.check .h { font-size: 12px; color: var(--ink-2); font-weight: 400; display: block; }
+.check.next .l::after { content: "Next"; font-size: 11px; font-weight: 700; color: var(--brass); background: var(--brass-soft); padding: 1px 6px; border-radius: 4px; margin-left: 8px; vertical-align: 1px; }
+.auto { font-size: 11px; color: var(--ink-2); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+
+.flags { display: grid; gap: 8px; }
+.flagitem { border-left: 3px solid var(--flag); background: var(--flag-soft); border-radius: 0 8px 8px 0; padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: start; }
+.flagitem p { overflow-wrap: anywhere; }
+.flagitem .when { grid-column: 1; font-size: 12px; color: var(--ink-2); }
+.flagitem.resolved { border-left-color: var(--rule); background: var(--paper); color: var(--ink-2); }
+.flagitem.resolved p { text-decoration: line-through; }
+textarea { width: 100%; min-height: 70px; padding: 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); resize: vertical; font-size: 16px; }
+.inline-form { display: grid; gap: 8px; }
+.inline-form .row-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.retake-box { background: var(--flag-soft); border-radius: 8px; padding: 12px; display: grid; gap: 8px; }
+
+.desc { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+.desc mark { background: var(--flag-soft); color: var(--flag); border-radius: 3px; padding: 0 2px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* links view */
+.links { margin-top: 16px; display: grid; gap: 14px; }
+.linklist { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--r); }
+.linkrow { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; padding: 9px 14px; border-bottom: 1px solid var(--rule); }
+.linkrow:last-child { border-bottom: 0; }
+.linkrow .u { grid-column: 2; font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); overflow-wrap: anywhere; }
+.linkrow .t { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.linkrow .btn { grid-row: 1 / 3; grid-column: 3; }
+
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--sheet); padding: 10px 16px; border-radius: 8px; font-size: 14px; z-index: 20; max-width: calc(100% - 32px); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="bar">
+    <div class="brand"><h1>LAB Lot Tracker</h1><span>Love-A-Bull auction · 32Auctions</span></div>
+    <nav class="nav">
+      <a href="" data-nav="overview" id="nav-overview">Overview</a>
+      <a href="links" data-nav="links" id="nav-links">Lot links</a>
+    </nav>
+  </header>
+  <div id="banner" class="banner" hidden></div>
+  <main id="view"><p class="empty">Loading lots…</p></main>
+</div>
+
+<script>
+(() => {
+  // ---------- paths ----------
+  const BASE = (location.pathname.match(/^\/t\/[^/]+/) || [''])[0];
+  const api = p => BASE + '/api' + p;
+
+  const STAGE_KEYS = ['listed', 'photographed', 'uploaded', 'checked', 'complete'];
+  const stageLabel = (key, lot) => {
+    const dig = lot && lot.type === 'digital';
+    return {
+      listed: 'Listed in 32Auctions',
+      photographed: dig ? 'Image added' : 'Photographed',
+      uploaded: dig ? 'Image uploaded to 32A' : 'Photos uploaded to 32A',
+      checked: 'Description checked',
+      complete: 'Complete',
+    }[key];
+  };
+  const SHORT = { listed: 'Listed in 32A', photographed: 'Photos taken', uploaded: 'Photos in 32A', checked: 'Description checked', complete: 'Complete' };
+  const HINT = {
+    listed: 'Tick after the CSV import or adding it in 32Auctions.',
+    photographed: 'Ticks itself when the first photo arrives.',
+    uploaded: 'Tick after uploading these photos in 32Auctions.',
+    checked: 'Compare the description with the photos.',
+    complete: 'Final sign-off.',
+  };
+
+  // ---------- state ----------
+  let D = null;            // last /api/state response
+  let byId = {};
+  const pending = [];      // photos waiting to upload or uploading: {key, lot, file, url, progress, failed}
+  let uploading = false;
+  const ui = { stage: null, filter: 'all', type: 'all', q: '', flagForm: false, retakeForm: false, showReplaced: false };
+
+  // ---------- helpers ----------
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const openFlags = id => D.flags.filter(f => f.lot_id === id && !f.resolved_at);
+  const nextStage = lot => STAGE_KEYS.find(k => !lot.stages[k]) || null;
+  const currentPhotos = lot => lot.photos.filter(p => !p.replaced);
+  const lotUrl = id => `${location.origin}${BASE}/lot/${id}`;
+  const tick = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>';
+  const when = iso => { const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); };
+  const typeBadge = l => l.type === 'digital' ? '<span class="badge dig">Digital</span>' : l.type === 'unset' ? '<span class="badge unset">Type not set</span>' : '<span class="badge phys">Physical</span>';
+
+  function toast(msg) {
+    document.querySelectorAll('.toast').forEach(t => t.remove());
+    const t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = msg;
+    document.body.appendChild(t); setTimeout(() => t.remove(), 3200);
+  }
+  async function copy(text, done) {
+    try { await navigator.clipboard.writeText(text); toast(done); }
+    catch { toast("Copying isn't allowed here. Select the text and copy it yourself."); }
+  }
+  async function post(path, body) {
+    const r = await fetch(api(path), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+    let data = null; try { data = await r.json(); } catch {}
+    if (!r.ok) throw new Error((data && data.detail && (typeof data.detail === 'string' ? data.detail : 'Something in that request was invalid.')) || `Request failed (${r.status}).`);
+    return data;
+  }
+
+  async function load() {
+    try {
+      const r = await fetch(api('/state'), { cache: 'no-store' });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || 'Could not load lots.');
+      D = data; byId = Object.fromEntries(D.lots.map(l => [l.id, l]));
+      const b = $('banner');
+      if (D.error) { b.hidden = false; b.className = 'banner warn'; b.textContent = `${D.error} Showing the last copy, from ${when(D.refreshed_at)}.`; }
+      else if (D.source === 'local') { b.hidden = false; b.className = 'banner info'; b.textContent = 'Local mode: not connected to the Google Sheet. Progress is saved on this server only.'; }
+      else b.hidden = true;
+      return true;
+    } catch (e) {
+      if (!D) $('view').innerHTML = `<p class="empty">Couldn't load lots. ${esc(e.message)}</p>`;
+      else toast("Couldn't refresh. Showing the last copy.");
+      return false;
+    }
+  }
+
+  // ---------- routing ----------
+  const path = () => location.pathname.slice(BASE.length).replace(/\/+$/, '');
+  function go(href) { history.pushState(null, '', href); ui.flagForm = ui.retakeForm = ui.showReplaced = false; render(); window.scrollTo(0, 0); }
+  document.addEventListener('click', e => {
+    const a = e.target.closest('a[data-nav]');
+    if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault(); go(a.getAttribute('href'));
+  });
+  window.addEventListener('popstate', () => render());
+  $('nav-overview').setAttribute('href', BASE + '/');
+  $('nav-links').setAttribute('href', BASE + '/links');
+
+  function render() {
+    if (!D) return;
+    const p = path(), m = p.match(/^\/lot\/(\d+)$/);
+    $('nav-overview').setAttribute('aria-current', p === '' || m ? 'page' : 'false');
+    $('nav-links').setAttribute('aria-current', p === '/links' ? 'page' : 'false');
+    if (m) {
+      if (byId[m[1]]) renderLot(+m[1]);
+      else $('view').innerHTML = `<a class="back" href="${BASE}/" data-nav>← All lots</a><p class="empty">There's no lot ${esc(m[1])} in the spreadsheet.</p>`;
+    } else if (p === '/links') renderLinks();
+    else renderOverview();
+  }
+
+  // ---------- overview ----------
+  function renderOverview() {
+    const lots = D.lots, n = lots.length || 1;
+    const flaggedLots = lots.filter(l => openFlags(l.id).length).length;
+    const tiles = STAGE_KEYS.map((k, i) => {
+      const done = lots.filter(l => l.stages[k]).length;
+      const waiting = lots.filter(l => nextStage(l) === k).length;
+      return `<button class="stage" data-stage="${k}" aria-pressed="${ui.stage === k}">
+        <span class="n">Step ${i + 1}</span><span class="lab">${SHORT[k]}</span>
+        <span class="big">${done}<small> / ${lots.length}</small></span>
+        <span class="meter"><i style="width:${done / n * 100}%"></i></span>
+        <span class="wait">${waiting ? `${waiting} up next` : 'Nothing waiting'}</span></button>`;
+    }).join('') + `<button class="stage flagtile" aria-pressed="${ui.filter === 'flagged'}">
+        <span class="n">Attention</span><span class="lab">Flagged lots</span>
+        <span class="big">${flaggedLots}</span><span class="meter" style="visibility:hidden"><i></i></span>
+        <span class="wait">${D.flags.filter(f => !f.resolved_at).length} open flags</span></button>`;
+
+    $('view').innerHTML = `
+      <section class="stages" aria-label="Progress by step">${tiles}</section>
+      <div class="toolbar">
+        <input type="search" id="q" placeholder="Search lot number, title or donor" value="${esc(ui.q)}" aria-label="Search lots">
+        <div class="seg" id="segFilter">
+          ${[['all', 'All'], ['flagged', 'Flagged'], ['retake', 'Needs retake'], ['complete', 'Complete']].map(([v, t]) => `<button data-v="${v}" aria-pressed="${ui.filter === v}">${t}</button>`).join('')}
+        </div>
+        <div class="seg" id="segType">
+          ${[['all', 'All types'], ['physical', 'Physical'], ['digital', 'Digital']].map(([v, t]) => `<button data-v="${v}" aria-pressed="${ui.type === v}">${t}</button>`).join('')}
+        </div>
+        ${ui.stage ? `<span class="active-filter">Next step: ${SHORT[ui.stage]} <button id="clearStage" aria-label="Clear step filter">×</button></span>` : ''}
+        <span class="count" id="count"></span>
+      </div>
+      <div class="list" id="list"></div>`;
+    drawList();
+
+    $('view').querySelectorAll('.stage[data-stage]').forEach(b => b.onclick = () => { ui.stage = ui.stage === b.dataset.stage ? null : b.dataset.stage; renderOverview(); });
+    $('view').querySelector('.flagtile').onclick = () => { ui.filter = ui.filter === 'flagged' ? 'all' : 'flagged'; renderOverview(); };
+    $('q').oninput = e => { ui.q = e.target.value; drawList(); };
+    $('segFilter').onclick = e => { const b = e.target.closest('button'); if (b) { ui.filter = b.dataset.v; renderOverview(); } };
+    $('segType').onclick = e => { const b = e.target.closest('button'); if (b) { ui.type = b.dataset.v; renderOverview(); } };
+    if ($('clearStage')) $('clearStage').onclick = () => { ui.stage = null; renderOverview(); };
+  }
+
+  function drawList() {
+    const q = ui.q.trim().toLowerCase();
+    const rows = D.lots.filter(l => {
+      if (ui.stage && nextStage(l) !== ui.stage) return false;
+      if (ui.filter === 'flagged' && !openFlags(l.id).length) return false;
+      if (ui.filter === 'retake' && !l.retake) return false;
+      if (ui.filter === 'complete' && !l.stages.complete) return false;
+      if (ui.type !== 'all' && l.type !== ui.type) return false;
+      return !q || String(l.id) === q || (l.title + ' ' + l.subtitle).toLowerCase().includes(q);
+    });
+    $('count').textContent = `${rows.length} of ${D.lots.length} lots`;
+    $('list').innerHTML = rows.length ? rows.map(l => {
+      const nx = nextStage(l), fl = openFlags(l.id).length;
+      const pips = STAGE_KEYS.map(k => `<span class="pip ${l.stages[k] ? 'done' : k === nx ? 'next' : ''}" title="${stageLabel(k, l)}: ${l.stages[k] ? 'done' : k === nx ? 'next step' : 'not yet'}">${l.stages[k] ? tick : ''}</span>`).join('');
+      return `<a class="row" href="${BASE}/lot/${l.id}" data-nav>
+        <span class="id">${l.id}</span>
+        <span class="t"><b>${esc(l.title)}</b><span>${esc(l.subtitle)}</span></span>
+        <span class="typecell">${typeBadge(l)}</span>
+        <span class="pips" aria-label="${STAGE_KEYS.filter(k => l.stages[k]).length} of 5 steps done">${pips}</span>
+        <span class="flagcell">${l.retake ? '<span class="badge retake">Retake</span>' : fl ? `<span class="badge flag">${fl} flag${fl > 1 ? 's' : ''}</span>` : l.stages.complete ? '<span class="badge done">Done</span>' : ''}</span>
+      </a>`;
+    }).join('') : `<div class="empty">${D.lots.length ? 'No lots match these filters.' : 'No lots found in the spreadsheet yet.'}</div>`;
+  }
+
+  // ---------- lot page ----------
+  function renderLot(id) {
+    const l = byId[id], nx = nextStage(l), dig = l.type === 'digital';
+    const flags = D.flags.filter(f => f.lot_id === id);
+    const open = flags.filter(f => !f.resolved_at), resolved = flags.filter(f => f.resolved_at);
+    const current = currentPhotos(l), replaced = l.photos.filter(p => p.replaced);
+    const mine = pending.filter(p => p.lot === id);
+    const descHtml = esc(l.description).replace(/\[[^\]]+\]/g, m => `<mark>${m}</mark>`);
+    const doneCount = STAGE_KEYS.filter(k => l.stages[k]).length;
+
+    const savedTile = (p, i) => `<a class="ph ${p.replaced ? 'replaced' : ''}" href="${p.url}" target="_blank" rel="noopener" aria-label="Open photo ${i + 1} full size">
+        <img src="${p.thumb}" alt="" loading="lazy">${p.replaced ? '<span class="tag">Replaced</span>' : ''}</a>`;
+    const pendingTile = p => `<div class="ph"><img src="${p.url}" alt="">
+        <div class="up">${p.failed ? `Upload failed · <button class="retry" data-retry="${p.key}">Retry</button>` : p.progress == null ? 'Waiting…' : `Uploading ${Math.round(p.progress)}%`}
+        <div class="m"><i style="width:${p.progress || 0}%"></i></div></div></div>`;
+
+    $('view').innerHTML = `
+      <a class="back" href="${BASE}/" data-nav>← All lots</a>
+      <header class="lothead">
+        <div class="eyebrow"><span class="lotno">LOT ${l.id}</span>${typeBadge(l)}${l.retake ? '<span class="badge retake">Needs retake</span>' : ''}${l.stages.complete ? '<span class="badge done">Complete</span>' : ''}</div>
+        <h2>${esc(l.title)}</h2>
+        <p class="sub">${esc(l.subtitle)}</p>
+      </header>
+      <div class="lotgrid">
+        <div class="col">
+          <section class="card" aria-labelledby="ph-h">
+            <h3 id="ph-h">${dig ? 'Image' : 'Photos'} <small>${current.length} ${current.length === 1 ? 'photo' : 'photos'}</small></h3>
+            <div class="camera">
+              <label class="shoot">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                ${dig ? 'Take photo' : 'Take photos'}
+                <input class="sr" type="file" accept="image/*" capture="environment" id="camIn">
+              </label>
+              <label class="lib">Choose from library<input class="sr" type="file" accept="image/*" multiple id="libIn"></label>
+            </div>
+            ${current.length || mine.length ? `<div class="photos">${current.map(savedTile).join('')}${mine.map(pendingTile).join('')}</div>`
+              : `<div class="photo-empty">${l.retake ? 'Waiting for new photos. The old ones were marked for a retake.' : "No photos yet. Each photo uploads at full size as soon as it's taken."}</div>`}
+            ${replaced.length ? `<button class="linkbtn" id="toggleReplaced">${ui.showReplaced ? 'Hide' : 'Show'} ${replaced.length} replaced ${replaced.length === 1 ? 'photo' : 'photos'}</button>${ui.showReplaced ? `<div class="photos">${replaced.map(savedTile).join('')}</div>` : ''}` : ''}
+            <div class="actions">
+              ${current.length ? `<a class="btn" href="${api(`/lots/${id}/photos.zip`)}" download>Download photos</a>` : '<button class="btn" disabled>Download photos</button>'}
+              <a class="btn" href="${esc(l.auction_url)}" target="_blank" rel="noopener">Open in 32Auctions ↗</a>
+              ${current.length && !ui.retakeForm ? '<button class="btn danger" id="retake">Needs retake…</button>' : ''}
+            </div>
+            ${ui.retakeForm ? `<div class="retake-box">
+              <label for="retakeText"><b>What's wrong with these photos?</b> <span class="muted">Optional</span></label>
+              <textarea id="retakeText" placeholder="e.g. Gift card text isn't readable"></textarea>
+              <p class="muted" style="font-size:13px">This hides the current photos, unticks Photographed and Photos uploaded, and adds a flag.</p>
+              <div class="actions"><button class="btn primary" id="retakeYes">Mark for retake</button><button class="btn" id="retakeNo">Cancel</button></div>
+            </div>` : ''}
+          </section>
+
+          <section class="card" aria-labelledby="desc-h">
+            <h3 id="desc-h">Description <small>from the bundle sheet</small></h3>
+            <p class="desc">${descHtml || '<span class="muted">No description in the sheet yet.</span>'}</p>
+          </section>
+        </div>
+
+        <div class="col">
+          <section class="card" aria-labelledby="st-h">
+            <h3 id="st-h">Steps <small>${doneCount} of 5 done</small></h3>
+            <div class="checks">
+              ${STAGE_KEYS.map(k => `<label class="check ${k === nx ? 'next' : ''}" for="ck-${k}">
+                <input type="checkbox" id="ck-${k}" data-k="${k}" ${l.stages[k] ? 'checked' : ''}>
+                <span><span class="l">${stageLabel(k, l)}</span><span class="h">${k === 'complete' && open.length ? `${open.length} open flag${open.length > 1 ? 's' : ''} on this lot.` : HINT[k]}</span></span>
+                ${k === 'photographed' ? '<span class="auto">Auto</span>' : '<span></span>'}
+              </label>`).join('')}
+            </div>
+          </section>
+
+          <section class="card" aria-labelledby="fl-h">
+            <h3 id="fl-h">Flags <small>${open.length} open</small></h3>
+            <div class="flags">
+              ${open.map(f => `<div class="flagitem"><p>${esc(f.text)}</p><button class="btn small" data-resolve="${esc(f.id)}">Resolve</button><span class="when">Raised ${when(f.raised_at)}</span></div>`).join('') || '<p class="muted">Nothing flagged on this lot.</p>'}
+            </div>
+            ${ui.flagForm ? `<form class="inline-form" id="flagForm">
+              <label for="flagText"><b>What's still needed?</b></label>
+              <textarea id="flagText" required maxlength="2000" placeholder="e.g. Missing the second wreath"></textarea>
+              <div class="row-btns"><button class="btn primary" type="submit">Add flag</button><button class="btn" type="button" id="flagCancel">Cancel</button></div>
+            </form>` : '<div><button class="btn" id="addFlag">Flag this lot</button></div>'}
+            ${resolved.length ? `<details><summary class="muted" style="cursor:pointer;font-size:13px">${resolved.length} resolved</summary><div class="flags" style="margin-top:8px">${resolved.map(f => `<div class="flagitem resolved"><p>${esc(f.text)}</p><span></span><span class="when">Resolved ${when(f.resolved_at)}</span></div>`).join('')}</div></details>` : ''}
+          </section>
+
+          <section class="card">
+            <h3>Link to this lot</h3>
+            <p class="mono" style="font-size:13px;overflow-wrap:anywhere">${esc(lotUrl(id))}</p>
+            <div><button class="btn small" id="copyOne">Copy link</button></div>
+          </section>
+        </div>
+      </div>`;
+
+    const v = $('view');
+    v.querySelectorAll('.check input').forEach(cb => cb.onchange = async () => {
+      const k = cb.dataset.k, done = cb.checked, before = { ...l.stages }, retakeBefore = l.retake;
+      l.stages[k] = done; if (k === 'photographed' && done) l.retake = false;
+      renderLot(id);
+      try { await post(`/lots/${id}/stages`, { stage: k, done }); toast(`${stageLabel(k, l)}: ${done ? 'done' : 'not done'}`); }
+      catch (e) { l.stages = before; l.retake = retakeBefore; renderLot(id); toast(e.message); }
+    });
+    v.querySelectorAll('[data-resolve]').forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      try { const f = await post(`/flags/${encodeURIComponent(b.dataset.resolve)}/resolve`); Object.assign(D.flags.find(x => x.id === f.id), f); renderLot(id); toast('Flag resolved'); }
+      catch (e) { b.disabled = false; toast(e.message); }
+    });
+    if ($('addFlag')) $('addFlag').onclick = () => { ui.flagForm = true; renderLot(id); $('flagText').focus(); };
+    if ($('flagCancel')) $('flagCancel').onclick = () => { ui.flagForm = false; renderLot(id); };
+    if ($('flagForm')) $('flagForm').onsubmit = async e => {
+      e.preventDefault(); const t = $('flagText').value.trim(); if (!t) return;
+      const btn = e.submitter; if (btn) btn.disabled = true;
+      try { D.flags.push(await post(`/lots/${id}/flags`, { text: t })); ui.flagForm = false; renderLot(id); toast('Flag added'); }
+      catch (err) { if (btn) btn.disabled = false; toast(err.message); }
+    };
+    if ($('retake')) $('retake').onclick = () => { ui.retakeForm = true; renderLot(id); $('retakeText').focus(); };
+    if ($('retakeNo')) $('retakeNo').onclick = () => { ui.retakeForm = false; renderLot(id); };
+    if ($('retakeYes')) $('retakeYes').onclick = async () => {
+      $('retakeYes').disabled = true;
+      try { await post(`/lots/${id}/retake`, { reason: $('retakeText').value.trim() }); ui.retakeForm = false; await load(); render(); toast('Marked for retake'); }
+      catch (e) { $('retakeYes').disabled = false; toast(e.message); }
+    };
+    if ($('toggleReplaced')) $('toggleReplaced').onclick = () => { ui.showReplaced = !ui.showReplaced; renderLot(id); };
+    v.querySelectorAll('[data-retry]').forEach(b => b.onclick = () => { const p = pending.find(x => x.key === b.dataset.retry); if (p) { p.failed = false; p.progress = null; pump(); renderLot(id); } });
+    $('copyOne').onclick = () => copy(lotUrl(id), 'Link copied');
+    const onPick = e => { addPhotos(id, [...e.target.files]); e.target.value = ''; };
+    $('camIn').onchange = onPick; $('libIn').onchange = onPick;
+  }
+
+  // ---------- uploads: one photo per request, full size, in order ----------
+  function addPhotos(lotId, files) {
+    for (const f of files) pending.push({ key: Math.random().toString(36).slice(2), lot: lotId, file: f, url: URL.createObjectURL(f), progress: null, failed: false });
+    rerenderIfOnLot(lotId);
+    pump();
+  }
+  function rerenderIfOnLot(lotId) { if (path() === `/lot/${lotId}` && !typing()) renderLot(lotId); }
+  function pump() {
+    if (uploading) return;
+    const p = pending.find(x => !x.failed);
+    if (!p) return;
+    uploading = true; p.progress = 0;
+    const fd = new FormData(); fd.append('photo', p.file, p.file.name || 'photo.jpg');
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', api(`/lots/${p.lot}/photos`));
+    let last = 0;
+    xhr.upload.onprogress = e => { if (e.lengthComputable) { p.progress = e.loaded / e.total * 99; if (Date.now() - last > 250) { last = Date.now(); rerenderIfOnLot(p.lot); } } };
+    const finish = ok => { uploading = false; rerenderIfOnLot(p.lot); pump(); };
+    xhr.onload = () => {
+      let data = null; try { data = JSON.parse(xhr.responseText); } catch {}
+      if (xhr.status >= 200 && xhr.status < 300 && data) {
+        pending.splice(pending.indexOf(p), 1); URL.revokeObjectURL(p.url);
+        const lot = byId[p.lot];
+        if (lot) { lot.photos.push(data.photo); lot.stages.photographed = true; lot.retake = false; }
+        if (data.warning) toast(data.warning);
+        finish(true);
+      } else {
+        p.failed = true;
+        toast(xhr.status === 413 ? 'That photo is too large to upload.' : (data && data.detail) || 'A photo failed to upload. Tap Retry.');
+        finish(false);
+      }
+    };
+    xhr.onerror = () => { p.failed = true; toast("A photo didn't upload. Check the Wi-Fi and tap Retry."); finish(false); };
+    xhr.send(fd);
+  }
+  window.addEventListener('beforeunload', e => { if (pending.some(p => !p.failed)) { e.preventDefault(); e.returnValue = ''; } });
+
+  // ---------- links ----------
+  function renderLinks() {
+    const all = D.lots.map(l => `Lot ${l.id}: ${l.title}\n${lotUrl(l.id)}`).join('\n\n');
+    $('view').innerHTML = `
+      <section class="links">
+        <div class="bar" style="align-items:end">
+          <div><h2 style="font-size:22px">Lot links</h2><p class="muted" style="max-width:60ch">One link per lot. Send a link to whoever is photographing or checking that lot. It opens straight to that lot's page.</p></div>
+          <button class="btn primary" id="copyAll">Copy all ${D.lots.length} links</button>
+        </div>
+        <div class="linklist">${D.lots.map(l => `<div class="linkrow">
+          <span class="mono muted">${l.id}</span><span class="t">${esc(l.title)}</span>
+          <span class="u">${esc(lotUrl(l.id))}</span>
+          <button class="btn small" data-copy="${l.id}">Copy</button></div>`).join('')}</div>
+      </section>`;
+    $('copyAll').onclick = () => copy(all, `Copied ${D.lots.length} links`);
+    $('view').querySelectorAll('[data-copy]').forEach(b => b.onclick = () => copy(lotUrl(+b.dataset.copy), `Copied link for lot ${b.dataset.copy}`));
+  }
+
+  // ---------- refresh ----------
+  const typing = () => { const a = document.activeElement; return a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && a.type !== 'checkbox' && a.type !== 'file')); };
+  async function refresh() {
+    if (document.hidden || ui.flagForm || ui.retakeForm || typing()) return;
+    if (await load()) render();
+  }
+  setInterval(refresh, 20000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+
+  load().then(ok => ok && render());
+})();
+</script>
+</body>
+</html>

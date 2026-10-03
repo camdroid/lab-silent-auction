@@ -1,0 +1,26 @@
+services:
+  tracker:
+    build: .
+    image: lab-lot-tracker
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:8000:8000"   # this machine only; the internet reaches it through the tunnel
+    volumes:
+      - tracker-data:/data       # photos and the photo index; back this up
+      - ./secrets:/run/secrets:ro
+
+  # Cloudflare Tunnel. Start with: docker compose --profile tunnel up -d
+  # In the Cloudflare dashboard, point the tunnel's public hostname at http://tracker:8000
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - tracker
+
+volumes:
+  tracker-data:
