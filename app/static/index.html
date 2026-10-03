@@ -507,6 +507,9 @@ textarea { width: 100%; min-height: 70px; padding: 10px; border: 1px solid var(-
     $('copyOne').onclick = () => copy(lotUrl(id), 'Link copied');
     const onPick = e => { addPhotos(id, [...e.target.files]); e.target.value = ''; };
     $('camIn').onchange = onPick; $('libIn').onchange = onPick;
+    // Some Android browsers ignore `capture` and show the photo picker instead of the camera.
+    // Chromium's picker adds a Camera option when it sees this pseudo-type. Android only, so iOS is untouched.
+    if (/Android/i.test(navigator.userAgent)) $('camIn').accept = 'image/*,android/allowCamera';
   }
 
   // ---------- uploads: one photo per request, full size, in order ----------
