@@ -5,7 +5,9 @@ services:
     restart: unless-stopped
     env_file: .env
     ports:
-      - "127.0.0.1:8000:8000"   # this machine only; the internet reaches it through the tunnel
+      # This machine only by default; the internet reaches it through the tunnel.
+      # Set BIND_ADDRESS=0.0.0.0 in .env to reach it from phones on the same Wi-Fi.
+      - "${BIND_ADDRESS:-127.0.0.1}:8000:8000"
     volumes:
       - tracker-data:/data       # photos and the photo index; back this up
       - ./secrets:/run/secrets:ro

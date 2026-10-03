@@ -73,7 +73,9 @@ docker compose --profile tunnel up -d --build
 
 Then share `https://lots.example.org/t/<TRACKER_TOKEN>/`. The **Lot links** page lists a link for every lot, with a button to copy them all.
 
-Port 8000 is only published on `127.0.0.1`, so the tunnel is the only way in from outside.
+Port 8000 is only published on `127.0.0.1` by default, so the tunnel is the only way in from outside.
+
+To use it from phones on the same Wi-Fi without the tunnel, set `BIND_ADDRESS=0.0.0.0` in `.env`, run `docker compose up -d`, and open `http://<this machine's IP>:8000/t/<TRACKER_TOKEN>/`. Over plain `http://`, phone browsers may block the copy-link buttons; everything else works, including the camera.
 
 ## Photos
 
