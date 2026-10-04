@@ -30,7 +30,7 @@ docker compose up -d --build
 
 Open `http://localhost:8000/t/<TRACKER_TOKEN>/`.
 
-With `GOOGLE_SHEET_ID` empty, it runs in **local mode**. It uses the sample lots in `sample/lots.csv` and saves progress inside the container's data volume. This is useful for trying it out before connecting the sheet.
+With `GOOGLE_SHEET_ID` empty, it runs in **local mode**. It uses the made-up example lots in `sample/lots.csv` and saves progress inside the container's data volume. This is useful for trying it out before connecting the sheet.
 
 Every page and file lives under `/t/<TRACKER_TOKEN>/`, and any other address returns "not found". Anyone with the link can use the tracker. To cut off old links, change `TRACKER_TOKEN` and run `docker compose up -d`.
 
@@ -53,9 +53,10 @@ To make "Open in 32Auctions" go to each lot's own page, add a `32Auctions URL` c
 
 ### Starting flags
 
-To load the open items from the listings handoff as flags:
+To load a list of open issues as flags, put them in a CSV with `Lot ID` and `Comment` columns. See `seed/example-flags.csv` for the format. Save it as `seed/initial-flags.csv`, which git ignores so real event details stay out of the repo, then:
 
 ```bash
+docker compose up -d --build
 docker compose run --rm tracker python -m app.seed_flags seed/initial-flags.csv
 ```
 
